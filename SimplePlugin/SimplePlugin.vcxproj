@@ -157,15 +157,10 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\plugin_sdk\clipper.cpp" />
-    <ClCompile Include="..\plugin_sdk\plugin_sdk.cpp" />
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="fake_cursor.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\plugin_sdk\clipper.h" />
-    <ClInclude Include="..\plugin_sdk\cpplinq.h" />
-    <ClInclude Include="..\plugin_sdk\plugin_sdk.hpp" />
     <ClInclude Include="fake_cursor.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

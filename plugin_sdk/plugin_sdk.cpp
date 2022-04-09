@@ -28,6 +28,8 @@ console_manager* console = nullptr;
 glow_manager* glow = nullptr;
 sound_manager* sound = nullptr;
 evade_manager* evade = nullptr;
+neutral_camp_manager* camp_manager = nullptr;
+translation_manager* translation = nullptr;
 
 std::uint16_t locked_target_selector::_last_target_id = 0;
 std::uint32_t locked_target_selector::_last_target_network_id = 0;
@@ -39,6 +41,11 @@ int __stdcall DllMain( void*, unsigned long, void* ) { return 1; }
 PLUGIN_API int get_sdk_version( )
 {
 	return PLUGIN_SDK_VERSION;
+}
+
+PLUGIN_API void on_plugin_reconnect( )
+{
+	myhero = plugin_sdk->get_myhero( );
 }
 
 std::vector<std::unique_ptr<script_spell>> script_spells;
@@ -615,23 +622,25 @@ int32_t game_object::is_casting_interruptible_spell( )
 	if ( !is_ai_hero( ) )
 		return 0;
 
-	auto active = this->get_active_spell( );
-
-	if ( !active || ( !active->is_channeling( ) && !active->is_charging( ) ) )
-		return 0;
-
 	auto champion = this->get_champion( );
 
+	if ( champion == champion_id::Nunu && this->has_buff( buff_hash( "NunuW" ) ) )
+		return 2;
+
+	auto active = this->get_active_spell( );
+
+	if ( !active )
+		return 0;
+
+	//High priority
+	if ( champion == champion_id::Rammus && active->get_spellslot( ) == spellslot::q )
+		return 2;
+	if ( champion == champion_id::Warwick && active->get_spellslot( ) == (spellslot)48 )
+		return 2;
 	if ( champion == champion_id::Velkoz && active->get_spellslot( ) == spellslot::r )
 		return 2;
-	if ( champion == champion_id::Warwick )
-	{
-		auto spell_data = active->get_spell_data( );
-		if ( spell_data && spell_data->get_name_hash( ) == spell_hash( "WarwickRChannel" ) )
-		{
-			return 2;
-		}
-	}
+	if ( champion == champion_id::Akshan && active->get_spellslot( ) == spellslot::r )
+		return 2;
 	if ( champion == champion_id::Xerath && active->get_spellslot( ) == spellslot::r )
 		return 2;
 	if ( champion == champion_id::Caitlyn && active->get_spellslot( ) == spellslot::r )
@@ -650,32 +659,53 @@ int32_t game_object::is_casting_interruptible_spell( )
 		return 2;
 	if ( champion == champion_id::Nunu && active->get_spellslot( ) == spellslot::r )
 		return 2;
+	if ( champion == champion_id::Nunu && active->get_spellslot( ) == spellslot::w )
+		return 2;
 	if ( champion == champion_id::Jhin && active->get_spellslot( ) == spellslot::r )
 		return 2;
 	if ( champion == champion_id::TwistedFate && active->get_spellslot( ) == spellslot::r )
 		return 2;
 	if ( champion == champion_id::Janna && active->get_spellslot( ) == spellslot::r )
 		return 2;
-	if ( champion == champion_id::TahmKench && active->get_spellslot( ) == spellslot::r )
-		return 2;
 	if ( champion == champion_id::Shen && active->get_spellslot( ) == spellslot::r )
 		return 2;
+	if ( champion == champion_id::Yuumi && active->get_spellslot( ) == spellslot::r )
+		return 2;
+	if ( champion == champion_id::Galio && active->get_spellslot( ) == spellslot::r )
+		return 2;
+	if ( champion == champion_id::Pantheon && active->get_spellslot( ) == spellslot::r )
+		return 2;
+	if ( champion == champion_id::TahmKench && active->get_spellslot( ) == spellslot::w )
+		return 2;
+	if ( champion == champion_id::Poppy && active->get_spellslot( ) == spellslot::r )
+		return 2;
+	if ( champion == champion_id::Pyke && active->get_spellslot( ) == spellslot::q )
+		return 2;
+	if ( champion == champion_id::Viego && active->get_spellslot( ) == spellslot::w )
+		return 2;
+
 	//Low Priority
 	if ( champion == champion_id::Sion && active->get_spellslot( ) == spellslot::q )
 		return 1;
+	if ( champion == champion_id::Galio && active->get_spellslot( ) == spellslot::w )
+		return 1;
 	if ( champion == champion_id::Varus && active->get_spellslot( ) == spellslot::q )
-		return 1;
-	if ( champion == champion_id::Pantheon && active->get_spellslot( ) == spellslot::e )
-		return 1;
-	if ( champion == champion_id::TahmKench && active->get_spellslot( ) == spellslot::r )
 		return 1;
 	if ( champion == champion_id::Xerath && active->get_spellslot( ) == spellslot::q )
 		return 1;
 	if ( champion == champion_id::Zac && active->get_spellslot( ) == spellslot::e )
 		return 1;
+	if ( champion == champion_id::Vi && active->get_spellslot( ) == spellslot::q )
+		return 1;
 	if ( champion == champion_id::MasterYi && active->get_spellslot( ) == spellslot::w )
 		return 1;
 	if ( champion == champion_id::FiddleSticks && active->get_spellslot( ) == spellslot::w )
+		return 1;
+	if ( champion == champion_id::Quinn && active->get_spellslot( ) == spellslot::r )
+		return 1;
+	if ( champion == champion_id::Vladimir && active->get_spellslot( ) == spellslot::e )
+		return 1;
+	if ( champion == champion_id::Pantheon && active->get_spellslot( ) == spellslot::q )
 		return 1;
 
 	return 0;

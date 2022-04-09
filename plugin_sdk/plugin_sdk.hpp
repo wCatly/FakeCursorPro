@@ -121,6 +121,8 @@ champion_id supported_champions[ ] = { __VA_ARGS__ , champion_id::Unknown };
 		glow		       = PLUGIN_SDK->get_glow_manager(); \
 		sound		       = PLUGIN_SDK->get_sound_manager(); \
 		evade		       = PLUGIN_SDK->get_evade_manager(); \
+		camp_manager	   = PLUGIN_SDK->get_neutral_camp_manager(); \
+		translation	       = PLUGIN_SDK->get_translation_manager(); \
 		entitylist		   = PLUGIN_SDK->get_entity_list();
 
 
@@ -159,13 +161,14 @@ champion_id supported_champions[ ] = { __VA_ARGS__ , champion_id::Unknown };
  */
 #define spell_hash(str) (std::integral_constant<std::uint32_t, spell_hash_real(str)>::value)
 
+#define translation_hash(str) (std::integral_constant<std::uint64_t, translation_hash_64_runtime(str)>::value)
 
  /**
   * Same as buff_hash but you can use it in runtime
   *
   * Example: buff_hash_real("ZeriR");
   */
-constexpr std::uint32_t __forceinline const buff_hash_real( const char* str )
+constexpr std::uint32_t const buff_hash_real( const char* str )
 {
 	std::uint32_t hash = 0x811C9DC5;
 	std::uint32_t len = 0;
@@ -192,7 +195,7 @@ constexpr std::uint32_t __forceinline const buff_hash_real( const char* str )
  *
  * Example: spell_hash_real("ZeriR");
  */
-constexpr std::uint32_t __forceinline const spell_hash_real( const char* str ) /*use for script_spell* name*/
+constexpr std::uint32_t const spell_hash_real( const char* str ) /*use for script_spell* name*/
 {
 	std::uint32_t hash = 0;
 	std::uint32_t len = 0;
@@ -217,6 +220,26 @@ constexpr std::uint32_t __forceinline const spell_hash_real( const char* str ) /
 	return hash;
 }
 
+constexpr std::uint64_t const translation_hash_64_runtime( const char* str )
+{
+	std::uint64_t hash = 0xCBF29CE484222325;
+	std::uint32_t len = 0;
+
+	while ( str[ len ] != '\0' )
+		len++;
+
+	for ( auto i = 0u; i < len; ++i )
+	{
+		auto input = str[ i ];
+		if ( !( static_cast< std::uint8_t >( input - 0x41 ) > 0x19u ) )
+			input = input + 0x20;
+
+		hash = 0x100000001B3 * ( hash ^ input );
+	}
+
+	return hash;
+}
+
 class game_object;
 class path_controller;
 class buff_instance;
@@ -226,6 +249,7 @@ class item;
 class spell_instance;
 class object_type;
 class character_data;
+class global_event_params;
 
 #ifdef INTERNAL_CORE
 using game_object_script = std::shared_ptr<game_object>;
@@ -237,6 +261,7 @@ using item_script = std::shared_ptr<item>;
 using spell_instance_script = std::shared_ptr<spell_instance>;
 using object_type_script = std::shared_ptr<object_type>;
 using character_data_script = std::shared_ptr<character_data>;
+using global_event_params_script = std::shared_ptr<global_event_params>;
 #else
 using game_object_script = game_object*;
 using path_controller_script = path_controller*;
@@ -247,6 +272,7 @@ using item_script = item*;
 using spell_instance_script = spell_instance*;
 using object_type_script = object_type*;
 using character_data_script = character_data*;
+using global_event_params_script = global_event_params*;
 #endif
 
 enum class game_state_stage
@@ -1951,6 +1977,10 @@ public:
 	virtual bool send_emote( emote_type emote ) = 0;
 	virtual bool display_champ_mastery_badge( ) = 0;
 	virtual void request_to_display_emote( summoner_emote_slot slot ) = 0;
+	
+	virtual void send_latency_ping( std::uint16_t latency ) = 0;
+	virtual void send_spell_ping(game_object_script hero, std::int32_t spell ) = 0;
+	virtual void send_hero_ping( game_object_script hero ) = 0;
 
 	bool is_valid( bool force = false );
 	
@@ -2486,6 +2516,13 @@ public:
 	//   You don't need to call is_visible and is_valid_target
 	//
 	virtual const std::vector<std::shared_ptr<game_object>>& get_attackable_objects( ) = 0;
+	
+	// AttackableUnit
+	//
+	// Returns attackable unit under your mouse
+	// Can return nullptr if there is no object
+	//
+	virtual std::shared_ptr<game_object> get_hovered_object( ) = 0;
 };
 
 namespace TreeHotkeyMode
@@ -2837,6 +2874,8 @@ enum class events
 	on_preupdate,
 	on_play_animation,
 	on_network_packet,
+	on_reconnect,
+	on_global_event,
 	events_size
 };
 
@@ -2983,6 +3022,12 @@ public:
 	virtual uintptr_t get_active_damagelib_selector( ) = 0;
 	virtual void remove_damagelib_callback( uintptr_t id ) = 0;
 	virtual void remove_damagelib_callback( std::string _name ) = 0;
+};
+
+class global_event_params
+{
+public:
+	virtual std::int32_t get_argument( std::int32_t index ) = 0;
 };
 
 struct ImVec4
@@ -3157,6 +3202,58 @@ private:
 	buff_instance_script get_charge_buff( );
 };
 
+namespace neutral_camp_id
+{
+	enum
+	{
+		Blue_Order = 1,
+		Wolves_Order,
+		Raptors_Order,
+		Red_Order,
+		Krugs_Order,
+		Dragon,
+		Blue_Chaos,
+		Wolves_Chaos,
+		Raptors_Chaos,
+		Red_Chaos,
+		Krugs_Chaos,
+		Baron,
+		Gromp_Order,
+		Gromp_Chaos,
+		Crab_Bottom,
+		Crab_Top,
+		Herlad,
+		Max_Camps
+	};
+};
+
+class neutral_camp_manager
+{
+public:
+	virtual float get_camp_respawn_time( std::int32_t camp_id ) = 0;
+	virtual void update_camp_respawn_time( std::int32_t camp_id, float time ) = 0;
+	virtual void update_camp_alive_status( std::int32_t camp_id, bool status ) = 0;
+	virtual std::vector<std::uint32_t> get_camp_minions( std::int32_t camp_id ) = 0;
+	virtual vector get_camp_position( std::int32_t camp_id ) = 0;
+	virtual bool get_camp_alive_status( std::int32_t camp_id ) = 0;
+};
+
+class language_info
+{
+public:
+	virtual void add_translation( std::uint64_t key, const std::wstring& value ) = 0;
+	virtual void add_translation( const std::map< std::uint64_t, std::wstring>& translation_map ) = 0;
+	virtual wchar_t* get_translation( std::uint64_t key ) = 0;
+};
+
+class translation_manager
+{
+public:
+	virtual language_info* add_language( const std::string& key, const std::string& display_name ) = 0;
+	virtual bool remove_language( const std::string& key ) = 0;
+	virtual wchar_t* get_translation( std::uint64_t key ) = 0;
+};
+
 class evade_manager;
 class plugin_sdk_core
 {
@@ -3190,6 +3287,8 @@ public:
 	virtual void* get_is_valid_function( ) = 0;
 	virtual sound_manager* get_sound_manager( ) = 0;
 	virtual evade_manager* get_evade_manager( ) = 0;
+	virtual neutral_camp_manager* get_neutral_camp_manager( ) = 0;
+	virtual translation_manager* get_translation_manager( ) = 0;
 	script_spell* register_spell( spellslot slot, float range );
 	bool remove_spell( script_spell* spell );
 };
@@ -3218,6 +3317,13 @@ struct event_handler<events::on_preupdate>
 };
 
 template < >
+struct event_handler<events::on_reconnect>
+{
+	static void add_callback( void( *callback )( ) ) { plugin_sdk->get_event_handler_manager( )->add_callback( events::on_reconnect, ( void* ) callback ); }
+	static void remove_handler( void( *callback )( ) ) { plugin_sdk->get_event_handler_manager( )->remove_callback( events::on_reconnect, ( void* ) callback ); }
+};
+
+template < >
 struct event_handler<events::on_draw>
 {
 	static void add_callback( void( *callback )( ) ) { plugin_sdk->get_event_handler_manager( )->add_callback( events::on_draw, ( void* ) callback ); }
@@ -3229,6 +3335,13 @@ struct event_handler<events::on_network_packet>
 {
 	static void add_callback( void( *callback )( game_object_script sender, std::uint32_t network_id, pkttype_e type, void* args ) ) { plugin_sdk->get_event_handler_manager( )->add_callback( events::on_network_packet, ( void* ) callback ); }
 	static void remove_handler( void( *callback )( game_object_script sender, std::uint32_t network_id, pkttype_e type, void* args ) ) { plugin_sdk->get_event_handler_manager( )->remove_callback( events::on_network_packet, ( void* ) callback ); }
+};
+
+template < >
+struct event_handler<events::on_global_event>
+{
+	static void add_callback( void( *callback )(std::uint32_t hash_name, const char* name, global_event_params_script params ) ) { plugin_sdk->get_event_handler_manager( )->add_callback( events::on_global_event, ( void* ) callback ); }
+	static void remove_handler( void( *callback )(std::uint32_t hash_name, const char* name, global_event_params_script params ) ) { plugin_sdk->get_event_handler_manager( )->remove_callback( events::on_global_event, ( void* ) callback ); }
 };
 
 template < >
@@ -3370,6 +3483,8 @@ extern scheduler_manager* scheduler;
 extern console_manager* console;
 extern glow_manager* glow;
 extern sound_manager* sound;
+extern neutral_camp_manager* camp_manager;
+extern translation_manager* translation;
 
 namespace geometry
 {
